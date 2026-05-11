@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html><head><title>SWP Debug QB</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+</head>
+<body style="font-family:monospace;padding:20px;font-size:12px">
+<h2>QB Data Deep Dive</h2>
+<div id="out">Fetching...</div>
+<script>
+async function run(){
+  const o = document.getElementById('out');
+  try {
+    const r = await fetch('https://hook.us2.make.com/xsrdp1s8ucf98pqewcgor482d73ux7yw',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source:'debug-qb',ts:Date.now()})
+    });
+    const raw = await r.json();
+    let h = '';
+    
+    // Invoice deep dive
+    h += '<h3>raw.invoices typeof: '+(typeof raw.invoices)+'</h3>';
+    let inv = raw.invoices;
+    if(typeof inv==='string'){
+      h += '<p>IS STRING - first 300 chars: '+inv.substring(0,300)+'</p>';
+      try{inv=JSON.parse(inv);h+='<p>Parsed OK</p>';}catch(e){h+='<p>Parse fail: '+e.message+'</p>';}
+    }
+    h += '<p>After parse - isArray: '+Array.isArray(inv)+', length: '+(inv&&inv.length)+'</p>';
+    if(Array.isArray(inv)&&inv.length>0){
+      h += '<p>inv[0] typeof: '+(typeof inv[0])+'</p>';
+      h += '<p>inv[0] === null: '+(inv[0]===null)+'</p>';
+      h += '<p>inv[0] === undefined: '+(inv[0]===undefined)+'</p>';
+      h += '<p>inv[0] constructor: '+(inv[0]&&inv[0].constructor?inv[0].constructor.name:'N/A')+'</p>';
+      h += '<p>Object.keys count: '+Object.keys(inv[0]||{}).length+'</p>';
+      h += '<p>JSON.stringify(inv[0]): '+JSON.stringify(inv[0]).substring(0,500)+'</p>';
+      h += '<p>JSON.stringify(inv[1]): '+JSON.stringify(inv[1]).substring(0,500)+'</p>';
+      h += '<p>JSON.stringify(inv[2]): '+JSON.stringify(inv[2]).substring(0,500)+'</p>';
+      // Try for..in
+      h += '<p>for..in keys: ';
+      for(let k in inv[0]){h+=k+', ';}
+      h += '</p>';
+      // Raw array slice
+      h += '<h3>First 3 items raw:</h3>';
+      h += '<pre>'+JSON.stringify(inv.slice(0,3),null,2).substring(0,2000)+'</pre>';
+    }
+    
+    // Bills deep dive
+    h += '<h3>raw.bills typeof: '+(typeof raw.bills)+'</h3>';
+    let bl = raw.bills;
+    if(typeof bl==='string'){
+      h += '<p>IS STRING - first 300: '+bl.substring(0,300)+'</p>';
+      try{bl=JSON.parse(bl);h+='<p>Parsed OK</p>';}catch(e){h+='<p>Parse fail</p>';}
+    }
+    if(Array.isArray(bl)&&bl.length>0){
+      h += '<p>bl[0] typeof: '+(typeof bl[0])+'</p>';
+      h += '<pre>'+JSON.stringify(bl.slice(0,2),null,2).substring(0,2000)+'</pre>';
+    }
+    
+    // Also find a JN job with financials
+    let jobs = raw.jobs;
+    if(jobs&&jobs.results) jobs=jobs.results;
+    if(Array.isArray(jobs)){
+      const rich = jobs.find(j=>j.approved_estimate_total>0);
+      if(rich){
+        h += '<h3>JN JOB WITH ESTIMATE:</h3>';
+        h += '<p>name='+rich.name+', number='+rich.number+'</p>';
+        h += '<p>approved_estimate_total='+rich.approved_estimate_total+'</p>';
+        h += '<p>approved_invoice_total='+rich.approved_invoice_total+'</p>';
+        h += '<p>last_budget_revenue='+rich.last_budget_revenue+'</p>';
+      } else {
+        h += '<h3>NO JOB HAS approved_estimate_total > 0</h3>';
+        // Check what financial fields have values across ALL jobs
+        const fields = ['approved_estimate_total','approved_invoice_total','last_budget_revenue','last_budget_gross_profit','last_estimate','last_invoice','parent_approved_estimate_total','parent_approved_invoice_total'];
+        fields.forEach(f=>{
+          const withVal = jobs.filter(j=>j[f]&&j[f]>0);
+          h += '<p>'+f+': '+withVal.length+' jobs have value > 0</p>';
+        });
+      }
+    }
+    
+    o.innerHTML = h;
+  }catch(e){
+    o.innerHTML='ERROR: '+e.message+'<pre>'+e.stack+'</pre>';
+  }
+}
+run();
+</script></body></html>
