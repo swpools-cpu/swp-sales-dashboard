@@ -1,78 +1,73 @@
 <!DOCTYPE html>
-<html><head><title>SWP Debug</title></head>
-<body style="font-family:monospace;padding:20px">
-<h2>SWP Dashboard Data Debug</h2>
-<div id="out">Loading...</div>
+<html><head><title>SWP Debug v2</title></head>
+<body style="font-family:monospace;padding:20px;font-size:12px">
+<h2>SWP Dashboard Data Debug v2</h2>
+<div id="out">Loading from webhook...</div>
 <script>
 async function run(){
   const o = document.getElementById('out');
   try {
     const r = await fetch('https://hook.us2.make.com/xsrdp1s8ucf98pqewcgor482d73ux7yw',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({source:'debug',ts:Date.now()})
+      body:JSON.stringify({source:'debug2',ts:Date.now()})
     });
     const raw = await r.json();
-    let html = '<h3>RAW TOP-LEVEL KEYS: '+Object.keys(raw).join(', ')+'</h3>';
-    
-    // Parse jobs
+    let html = '';
+
+    // JOBS - we already know the structure
     let jobs = raw.jobs;
     if(typeof jobs==='string') try{jobs=JSON.parse(jobs)}catch(e){}
-    html += '<h3>raw.jobs type: '+(typeof raw.jobs)+', isArray: '+Array.isArray(jobs)+'</h3>';
-    if(jobs && jobs.results) {
-      html += '<p>jobs.results is array of '+jobs.results.length+'</p>';
-      jobs = jobs.results;
-    }
+    if(jobs && jobs.results) jobs = jobs.results;
+    html += '<h3>JOBS: '+((Array.isArray(jobs)?jobs.length:'?'))+' total</h3>';
     if(Array.isArray(jobs) && jobs.length){
-      const j = jobs[0];
-      html += '<h3>FIRST JOB KEYS ('+Object.keys(j).length+'):</h3>';
-      html += '<p>'+Object.keys(j).join(', ')+'</p>';
-      // Show name-related fields
-      const nameFields = ['display_name','name','first_name','last_name','number','description','title','customer','primary'];
-      html += '<h3>NAME-RELATED FIELDS:</h3>';
-      nameFields.forEach(f => {
-        const v = j[f];
-        if(v !== undefined) html += '<p><b>'+f+'</b> = '+JSON.stringify(v).substring(0,200)+'</p>';
-      });
-      // Show financial fields
-      const finFields = ['sales_price','estimate_total','amount','amount_to_be_paid','total','price','contract_amount','revenue','budget'];
-      html += '<h3>FINANCIAL FIELDS:</h3>';
-      finFields.forEach(f => {
-        const v = j[f];
-        if(v !== undefined) html += '<p><b>'+f+'</b> = '+JSON.stringify(v)+'</p>';
-      });
-      // Show ALL fields with values for first job
-      html += '<h3>ALL FIRST JOB FIELDS WITH VALUES:</h3>';
-      Object.keys(j).sort().forEach(k => {
-        const v = j[k];
-        if(v !== null && v !== undefined && v !== '' && v !== 0){
-          html += '<p><b>'+k+'</b> = '+JSON.stringify(v).substring(0,150)+'</p>';
-        }
-      });
+      // Find a job with financial data
+      const richJob = jobs.find(j => j.approved_estimate_total || j.last_budget_revenue) || jobs[0];
+      html += '<p><b>Sample job with financials:</b> '+richJob.name+' #'+richJob.number+'</p>';
+      html += '<p>approved_estimate_total='+richJob.approved_estimate_total+', approved_invoice_total='+richJob.approved_invoice_total+'</p>';
+      html += '<p>last_budget_revenue='+richJob.last_budget_revenue+', last_budget_gross_profit='+richJob.last_budget_gross_profit+'</p>';
+      html += '<p>last_estimate='+richJob.last_estimate+', last_invoice='+richJob.last_invoice+'</p>';
     }
+
+    // INVOICES - deep dive
+    html += '<h3>INVOICES RAW</h3>';
+    html += '<p>typeof raw.invoices: '+(typeof raw.invoices)+'</p>';
+    let invRaw = raw.invoices;
+    html += '<p>First 500 chars of raw.invoices: '+JSON.stringify(invRaw).substring(0,500)+'</p>';
     
-    // Parse invoices
-    let invs = raw.invoices;
-    if(typeof invs==='string') try{invs=JSON.parse(invs)}catch(e){}
-    html += '<h3>INVOICES type: '+(typeof raw.invoices)+', parsed isArray: '+Array.isArray(invs)+', count: '+(Array.isArray(invs)?invs.length:'N/A')+'</h3>';
+    let invs = invRaw;
+    if(typeof invs==='string') {
+      html += '<p>Invoices is a string, attempting JSON.parse...</p>';
+      try{invs=JSON.parse(invs); html+='<p>Parse success, isArray: '+Array.isArray(invs)+', length: '+(invs?invs.length:'null')+'</p>';}catch(e){html+='<p>Parse failed: '+e.message+'</p>';}
+    }
     if(Array.isArray(invs) && invs.length){
-      const inv = invs[0];
-      html += '<h3>FIRST INVOICE KEYS:</h3><p>'+Object.keys(inv).join(', ')+'</p>';
-      html += '<p><b>CustomerRef</b> = '+JSON.stringify(inv.CustomerRef)+'</p>';
-      html += '<p><b>TotalAmt</b> = '+JSON.stringify(inv.TotalAmt)+'</p>';
-      html += '<p><b>DocNumber</b> = '+JSON.stringify(inv.DocNumber)+'</p>';
+      const first = invs[0];
+      html += '<p>typeof invs[0]: '+(typeof first)+'</p>';
+      html += '<p>invs[0] constructor: '+(first && first.constructor ? first.constructor.name : 'none')+'</p>';
+      html += '<p>Object.keys(invs[0]): ['+Object.keys(first||{}).join(', ')+']</p>';
+      html += '<p>Object.getOwnPropertyNames(invs[0]): ['+Object.getOwnPropertyNames(first||{}).join(', ')+']</p>';
+      html += '<p>JSON.stringify(invs[0]) first 800 chars:</p>';
+      html += '<pre>'+JSON.stringify(first,null,2).substring(0,800)+'</pre>';
+      html += '<p>JSON.stringify(invs[1]) first 800 chars:</p>';
+      html += '<pre>'+JSON.stringify(invs[1],null,2).substring(0,800)+'</pre>';
     }
+
+    // BILLS - deep dive
+    html += '<h3>BILLS RAW</h3>';
+    html += '<p>typeof raw.bills: '+(typeof raw.bills)+'</p>';
+    let billRaw = raw.bills;
+    html += '<p>First 500 chars of raw.bills: '+JSON.stringify(billRaw).substring(0,500)+'</p>';
     
-    // Parse bills
-    let bills = raw.bills;
-    if(typeof bills==='string') try{bills=JSON.parse(bills)}catch(e){}
-    html += '<h3>BILLS type: '+(typeof raw.bills)+', parsed isArray: '+Array.isArray(bills)+', count: '+(Array.isArray(bills)?bills.length:'N/A')+'</h3>';
+    let bills = billRaw;
+    if(typeof bills==='string') {
+      try{bills=JSON.parse(bills); html+='<p>Parse success, isArray: '+Array.isArray(bills)+', length: '+(bills?bills.length:'null')+'</p>';}catch(e){html+='<p>Parse failed: '+e.message+'</p>';}
+    }
     if(Array.isArray(bills) && bills.length){
-      const b = bills[0];
-      html += '<h3>FIRST BILL KEYS:</h3><p>'+Object.keys(b).join(', ')+'</p>';
-      html += '<p><b>CustomerRef</b> = '+JSON.stringify(b.CustomerRef)+'</p>';
-      html += '<p><b>VendorRef</b> = '+JSON.stringify(b.VendorRef)+'</p>';
+      const first = bills[0];
+      html += '<p>typeof bills[0]: '+(typeof first)+'</p>';
+      html += '<p>JSON.stringify(bills[0]) first 800 chars:</p>';
+      html += '<pre>'+JSON.stringify(first,null,2).substring(0,800)+'</pre>';
     }
-    
+
     o.innerHTML = html;
   } catch(e) {
     o.innerHTML = '<h3 style="color:red">ERROR: '+e.message+'</h3><pre>'+e.stack+'</pre>';
