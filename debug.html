@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html><head><title>SWP Debug</title></head>
+<body style="font-family:monospace;padding:20px">
+<h2>SWP Dashboard Data Debug</h2>
+<div id="out">Loading...</div>
+<script>
+async function run(){
+  const o = document.getElementById('out');
+  try {
+    const r = await fetch('https://hook.us2.make.com/xsrdp1s8ucf98pqewcgor482d73ux7yw',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({source:'debug',ts:Date.now()})
+    });
+    const raw = await r.json();
+    let html = '<h3>RAW TOP-LEVEL KEYS: '+Object.keys(raw).join(', ')+'</h3>';
+    
+    // Parse jobs
+    let jobs = raw.jobs;
+    if(typeof jobs==='string') try{jobs=JSON.parse(jobs)}catch(e){}
+    html += '<h3>raw.jobs type: '+(typeof raw.jobs)+', isArray: '+Array.isArray(jobs)+'</h3>';
+    if(jobs && jobs.results) {
+      html += '<p>jobs.results is array of '+jobs.results.length+'</p>';
+      jobs = jobs.results;
+    }
+    if(Array.isArray(jobs) && jobs.length){
+      const j = jobs[0];
+      html += '<h3>FIRST JOB KEYS ('+Object.keys(j).length+'):</h3>';
+      html += '<p>'+Object.keys(j).join(', ')+'</p>';
+      // Show name-related fields
+      const nameFields = ['display_name','name','first_name','last_name','number','description','title','customer','primary'];
+      html += '<h3>NAME-RELATED FIELDS:</h3>';
+      nameFields.forEach(f => {
+        const v = j[f];
+        if(v !== undefined) html += '<p><b>'+f+'</b> = '+JSON.stringify(v).substring(0,200)+'</p>';
+      });
+      // Show financial fields
+      const finFields = ['sales_price','estimate_total','amount','amount_to_be_paid','total','price','contract_amount','revenue','budget'];
+      html += '<h3>FINANCIAL FIELDS:</h3>';
+      finFields.forEach(f => {
+        const v = j[f];
+        if(v !== undefined) html += '<p><b>'+f+'</b> = '+JSON.stringify(v)+'</p>';
+      });
+      // Show ALL fields with values for first job
+      html += '<h3>ALL FIRST JOB FIELDS WITH VALUES:</h3>';
+      Object.keys(j).sort().forEach(k => {
+        const v = j[k];
+        if(v !== null && v !== undefined && v !== '' && v !== 0){
+          html += '<p><b>'+k+'</b> = '+JSON.stringify(v).substring(0,150)+'</p>';
+        }
+      });
+    }
+    
+    // Parse invoices
+    let invs = raw.invoices;
+    if(typeof invs==='string') try{invs=JSON.parse(invs)}catch(e){}
+    html += '<h3>INVOICES type: '+(typeof raw.invoices)+', parsed isArray: '+Array.isArray(invs)+', count: '+(Array.isArray(invs)?invs.length:'N/A')+'</h3>';
+    if(Array.isArray(invs) && invs.length){
+      const inv = invs[0];
+      html += '<h3>FIRST INVOICE KEYS:</h3><p>'+Object.keys(inv).join(', ')+'</p>';
+      html += '<p><b>CustomerRef</b> = '+JSON.stringify(inv.CustomerRef)+'</p>';
+      html += '<p><b>TotalAmt</b> = '+JSON.stringify(inv.TotalAmt)+'</p>';
+      html += '<p><b>DocNumber</b> = '+JSON.stringify(inv.DocNumber)+'</p>';
+    }
+    
+    // Parse bills
+    let bills = raw.bills;
+    if(typeof bills==='string') try{bills=JSON.parse(bills)}catch(e){}
+    html += '<h3>BILLS type: '+(typeof raw.bills)+', parsed isArray: '+Array.isArray(bills)+', count: '+(Array.isArray(bills)?bills.length:'N/A')+'</h3>';
+    if(Array.isArray(bills) && bills.length){
+      const b = bills[0];
+      html += '<h3>FIRST BILL KEYS:</h3><p>'+Object.keys(b).join(', ')+'</p>';
+      html += '<p><b>CustomerRef</b> = '+JSON.stringify(b.CustomerRef)+'</p>';
+      html += '<p><b>VendorRef</b> = '+JSON.stringify(b.VendorRef)+'</p>';
+    }
+    
+    o.innerHTML = html;
+  } catch(e) {
+    o.innerHTML = '<h3 style="color:red">ERROR: '+e.message+'</h3><pre>'+e.stack+'</pre>';
+  }
+}
+run();
+</script></body></html>
