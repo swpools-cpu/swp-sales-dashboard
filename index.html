@@ -290,25 +290,42 @@ function extractBillCustomer(bill){
 
 function buildEstimateMap(){
   // Map job jnid -> aggregated estimate data
-  // Revenue/Cost totals: sum ONLY "Invoiced" estimates (includes change orders that were invoiced)
-  // estimates[] array: keep ALL estimates for drill-down visibility
+  // - invoicedRevenue/Cost: sum of Invoiced estimates (used for Production/Completed tabs)
+  // - activeEstimates: estimates with status Sent or Approved, sorted newest-first (used for Pipeline tab)
+  // - estimates[]: ALL estimates regardless of status (used for drill-down display)
   const map = {};
   STATE.estimates.forEach(est => {
     if(!est.related) return;
     const jobRel = est.related.find(r => r.type === 'job');
     if(!jobRel) return;
     const jobId = jobRel.id;
-    if(!map[jobId]) map[jobId] = { estRevenue:0, estCost:0, estimates:[] };
+    if(!map[jobId]) map[jobId] = { 
+      invoicedRevenue: 0, 
+      invoicedCost: 0, 
+      activeEstimates: [],
+      estimates: [] 
+    };
     
-    // Only count Invoiced estimates toward totals
+    // Production/Completed totals: sum Invoiced estimates only
     if(est.status_name === 'Invoiced'){
-      map[jobId].estRevenue += (parseFloat(est.total) || 0);
-      map[jobId].estCost += (parseFloat(est.cost) || 0);
+      map[jobId].invoicedRevenue += (parseFloat(est.total) || 0);
+      map[jobId].invoicedCost += (parseFloat(est.cost) || 0);
     }
     
-    // Always keep estimate in drill-down list regardless of status
+    // Pipeline candidates: active estimates (Sent or Approved)
+    if(est.status_name === 'Sent' || est.status_name === 'Approved'){
+      map[jobId].activeEstimates.push(est);
+    }
+    
+    // Always include in drill-down list regardless of status
     map[jobId].estimates.push(est);
   });
+  
+  // Sort active estimates newest-first so [0] is the latest offer
+  Object.values(map).forEach(entry => {
+    entry.activeEstimates.sort((a,b) => (b.date_created||0) - (a.date_created||0));
+  });
+  
   return map;
 }
 
@@ -357,11 +374,21 @@ function buildJobFinancials(){
     }
 
     // Estimate data (from JN estimates)
-    const estData = estimateMap[job.jnid] || { estRevenue:0, estCost:0, estimates:[] };
+    const estData = estimateMap[job.jnid] || { invoicedRevenue:0, invoicedCost:0, activeEstimates:[], estimates:[] };
+    const jobCategory = classifyJob(job.status_name);
 
-    // Use approved_estimate_total from job if no estimates found, otherwise use aggregated estimate total
-    const estimatedRevenue = estData.estRevenue || (parseFloat(job.approved_estimate_total) || 0);
-    const estimatedCost = estData.estCost;
+    // Pick estimate values based on job category:
+    // - Pipeline jobs: most recent active estimate (Sent or Approved)
+    // - Production/Completed: sum of Invoiced estimates
+    let estimatedRevenue, estimatedCost;
+    if(jobCategory === 'pipeline'){
+      const latest = estData.activeEstimates[0];
+      estimatedRevenue = latest ? (parseFloat(latest.total)||0) : (parseFloat(job.approved_estimate_total)||0);
+      estimatedCost = latest ? (parseFloat(latest.cost)||0) : 0;
+    } else {
+      estimatedRevenue = estData.invoicedRevenue || (parseFloat(job.approved_estimate_total) || 0);
+      estimatedCost = estData.invoicedCost;
+    }
     const estimatedMargin = estimatedRevenue > 0 ? ((estimatedRevenue - estimatedCost) / estimatedRevenue) * 100 : 0;
 
     // QB actuals
