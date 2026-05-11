@@ -289,7 +289,9 @@ function extractBillCustomer(bill){
 }
 
 function buildEstimateMap(){
-  // Map job jnid -> aggregated estimate data (sum across all estimates including change orders)
+  // Map job jnid -> aggregated estimate data
+  // Revenue/Cost totals: sum ONLY "Invoiced" estimates (includes change orders that were invoiced)
+  // estimates[] array: keep ALL estimates for drill-down visibility
   const map = {};
   STATE.estimates.forEach(est => {
     if(!est.related) return;
@@ -297,8 +299,14 @@ function buildEstimateMap(){
     if(!jobRel) return;
     const jobId = jobRel.id;
     if(!map[jobId]) map[jobId] = { estRevenue:0, estCost:0, estimates:[] };
-    map[jobId].estRevenue += (parseFloat(est.total) || 0);
-    map[jobId].estCost += (parseFloat(est.cost) || 0);
+    
+    // Only count Invoiced estimates toward totals
+    if(est.status_name === 'Invoiced'){
+      map[jobId].estRevenue += (parseFloat(est.total) || 0);
+      map[jobId].estCost += (parseFloat(est.cost) || 0);
+    }
+    
+    // Always keep estimate in drill-down list regardless of status
     map[jobId].estimates.push(est);
   });
   return map;
