@@ -244,33 +244,39 @@ function dateFilter(epochSec){
 }
 
 // ─── CACHE HELPERS ───────────────────────────────────────────────
-function pruneForCache(invoices, bills){
-  // Strip Line items (biggest payload) after extracting bill customer names
-  // Invoices: keep only fields the dashboard uses
+function pruneForCache(jobs, workorders, estimates, invoices, bills){
+  // Strip every field the dashboard doesn't use — keeps localStorage under 5MB
+  const pJobs = jobs.map(j => ({
+    jnid:j.jnid, name:j.name, record_type:j.record_type, record_type_name:j.record_type_name,
+    status_name:j.status_name, date_created:j.date_created, date_status_change:j.date_status_change,
+    approved_estimate_total:j.approved_estimate_total
+  }));
+  const pWOs = workorders.map(w => ({
+    jnid:w.jnid, name:w.name, record_type:w.record_type, status_name:w.status_name,
+    related:w.related
+  }));
+  const pEst = estimates.map(e => ({
+    jnid:e.jnid, number:e.number, recid:e.recid, total:e.total, cost:e.cost, margin:e.margin,
+    status_name:e.status_name, date_created:e.date_created, related:e.related
+  }));
   const pInv = invoices.map(i => ({
     Id:i.Id, DocNumber:i.DocNumber, TotalAmt:i.TotalAmt, Balance:i.Balance,
     TxnDate:i.TxnDate, CustomerRef:i.CustomerRef
   }));
-  // Bills: extract customer from Line items, then drop Line
   const pBill = bills.map(b => ({
     Id:b.Id, DocNumber:b.DocNumber, TotalAmt:b.TotalAmt, Balance:b.Balance,
     TxnDate:b.TxnDate, VendorRef:b.VendorRef, CustomerRef:b.CustomerRef,
-    _custName: extractBillCustomer(b),   // pre-extracted from Line items
-    Line: null                            // drop heavy payload
+    _custName: extractBillCustomer(b)
   }));
-  return { invoices:pInv, bills:pBill };
+  return { jobs:pJobs, workorders:pWOs, estimates:pEst, invoices:pInv, bills:pBill };
 }
 
 function saveCache(jobs, workorders, estimates, invoices, bills){
   try {
-    const pruned = pruneForCache(invoices, bills);
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-      ts: Date.now(),
-      jobs, workorders, estimates,
-      invoices: pruned.invoices,
-      bills: pruned.bills
-    }));
-  } catch(e){ /* storage full — silent fail */ }
+    const p = pruneForCache(jobs, workorders, estimates, invoices, bills);
+    const payload = JSON.stringify({ ts:Date.now(), ...p });
+    localStorage.setItem(CACHE_KEY, payload);
+  } catch(e){ console.warn('Cache save failed:', e.message); }
 }
 
 function loadCache(){
