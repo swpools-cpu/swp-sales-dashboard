@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Southwest Pools - Sales &amp; Profit Dashboard</title>
+<title>SW Pools - Sales &amp; Profit Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -139,7 +139,7 @@ footer{text-align:center;padding:16px;font-size:11px;color:var(--gray-600);borde
       <label>Overhead %</label>
       <input type="number" id="overheadRate" value="31" min="0" max="100" step="0.5">
     </div>
-    <button class="btn btn-refresh" id="btnRefresh" onclick="loadData()">Refresh</button>
+    <button class="btn btn-refresh" id="btnRefresh" onclick="loadData(true)">Refresh</button>
     <span class="status-msg" id="statusMsg"></span>
   </div>
 </header>
@@ -166,12 +166,16 @@ footer{text-align:center;padding:16px;font-size:11px;color:var(--gray-600);borde
 </div>
 
 <footer>
-  Southwest Pools &mdash; Sales &amp; Profit Dashboard v3.1 &mdash; Data: JobNimbus + QuickBooks &mdash; Updated <span id="lastUpdated">--</span>
+  Southwest Pools &mdash; Sales &amp; Profit Dashboard v3.2 &mdash; Data: JobNimbus + QuickBooks &mdash; Updated <span id="lastUpdated">--</span>
 </footer>
 
 <script>
 // ─── CONFIG ──────────────────────────────────────────────────────
 const WEBHOOK_URL = 'https://hook.us2.make.com/xsrdp1s8ucf98pqewcgor482d73ux7yw';
+
+// Cache config — avoids re-fetching from Make.com on every page load
+const CACHE_KEY    = 'swp_dash_v2';
+const CACHE_MAX_MS = 6 * 60 * 60 * 1000;   // 6 hours
 
 // Status classification
 const PIPELINE_STATUSES = ['Lead','Appointment Scheduled','Design In Progress','Design Approval','Sent Estimate'];
@@ -239,12 +243,76 @@ function dateFilter(epochSec){
   return true;
 }
 
+// ─── CACHE HELPERS ───────────────────────────────────────────────
+function pruneForCache(invoices, bills){
+  // Strip Line items (biggest payload) after extracting bill customer names
+  // Invoices: keep only fields the dashboard uses
+  const pInv = invoices.map(i => ({
+    Id:i.Id, DocNumber:i.DocNumber, TotalAmt:i.TotalAmt, Balance:i.Balance,
+    TxnDate:i.TxnDate, CustomerRef:i.CustomerRef
+  }));
+  // Bills: extract customer from Line items, then drop Line
+  const pBill = bills.map(b => ({
+    Id:b.Id, DocNumber:b.DocNumber, TotalAmt:b.TotalAmt, Balance:b.Balance,
+    TxnDate:b.TxnDate, VendorRef:b.VendorRef, CustomerRef:b.CustomerRef,
+    _custName: extractBillCustomer(b),   // pre-extracted from Line items
+    Line: null                            // drop heavy payload
+  }));
+  return { invoices:pInv, bills:pBill };
+}
+
+function saveCache(jobs, workorders, estimates, invoices, bills){
+  try {
+    const pruned = pruneForCache(invoices, bills);
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      ts: Date.now(),
+      jobs, workorders, estimates,
+      invoices: pruned.invoices,
+      bills: pruned.bills
+    }));
+  } catch(e){ /* storage full — silent fail */ }
+}
+
+function loadCache(){
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(!raw) return null;
+    const c = JSON.parse(raw);
+    if(Date.now() - c.ts > CACHE_MAX_MS) return null;
+    return c;
+  } catch{ return null; }
+}
+
+function cacheAge(ts){
+  const mins = Math.round((Date.now() - ts) / 60000);
+  if(mins < 1) return 'just now';
+  if(mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins/60);
+  const rm = mins % 60;
+  return hrs + 'h ' + rm + 'm ago';
+}
+
 // ─── DATA LOADING ────────────────────────────────────────────────
-async function loadData(){
+async function loadData(forceRefresh){
   const btn = $('btnRefresh');
   const msg = $('statusMsg');
+
+  // 1) Try cache first (unless force-refresh)
+  if(!forceRefresh){
+    const cached = loadCache();
+    if(cached){
+      applyData(cached);
+      const age = cacheAge(cached.ts);
+      msg.innerHTML = `<span class="status-dot" style="background:var(--teal)"></span> Cached (${age}) &mdash; ${STATE.jobs.length} jobs, ${STATE.estimates.length} est, ${STATE.invoices.length} inv, ${STATE.bills.length} bills`;
+      $('lastUpdated').textContent = new Date(cached.ts).toLocaleString();
+      render();
+      return;
+    }
+  }
+
+  // 2) Live fetch from Make.com webhook
   btn.disabled = true;
-  msg.textContent = 'Loading...';
+  msg.textContent = 'Fetching live data...';
   $('loadingArea').innerHTML = '<div class="loading-screen"><div class="spinner"></div><p>Fetching data from JobNimbus &amp; QuickBooks...</p></div>';
   $('summaryCards').innerHTML = '';
   $('tableWrap').innerHTML = '';
@@ -258,22 +326,50 @@ async function loadData(){
     if(!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
     const raw = await resp.json();
 
-    STATE.jobs = parseSection(raw.jobs, 'results') || [];
-    STATE.workorders = parseSection(raw.workorders, 'results') || [];
-    STATE.estimates = parseSection(raw.estimates, 'results') || [];
-    STATE.invoices = parseJsonOrArray(raw.invoices) || [];
-    STATE.bills = parseJsonOrArray(raw.bills) || [];
+    const jobs       = parseSection(raw.jobs, 'results') || [];
+    const workorders = parseSection(raw.workorders, 'results') || [];
+    const estimates  = parseSection(raw.estimates, 'results') || [];
+    const invoices   = parseJsonOrArray(raw.invoices) || [];
+    const bills      = parseJsonOrArray(raw.bills) || [];
+
+    // Apply to STATE
+    STATE.jobs = jobs;
+    STATE.workorders = workorders;
+    STATE.estimates = estimates;
+    STATE.invoices = invoices;
+    STATE.bills = bills;
+
+    // Save to cache (pruned — strips Line items to fit localStorage)
+    saveCache(jobs, workorders, estimates, invoices, bills);
 
     $('loadingArea').innerHTML = '';
-    msg.innerHTML = `<span class="status-dot" style="background:var(--green)"></span> ${STATE.jobs.length} jobs, ${STATE.estimates.length} estimates, ${STATE.invoices.length} invoices, ${STATE.bills.length} bills`;
+    msg.innerHTML = `<span class="status-dot" style="background:var(--green)"></span> Live &mdash; ${jobs.length} jobs, ${estimates.length} est, ${invoices.length} inv, ${bills.length} bills`;
     $('lastUpdated').textContent = new Date().toLocaleString();
     render();
   } catch(e){
-    $('loadingArea').innerHTML = `<div class="error-box"><strong>Failed to load data.</strong> ${e.message}<code>${e.stack||''}</code></div>`;
-    msg.innerHTML = '<span class="status-dot" style="background:var(--red)"></span> Error';
+    // If live fetch fails but we have ANY cache (even expired), use it
+    const stale = (() => { try { const r=localStorage.getItem(CACHE_KEY); return r?JSON.parse(r):null; } catch{return null;} })();
+    if(stale && stale.jobs){
+      applyData(stale);
+      $('loadingArea').innerHTML = '';
+      msg.innerHTML = `<span class="status-dot" style="background:var(--orange)"></span> Offline — using stale cache (${cacheAge(stale.ts)})`;
+      $('lastUpdated').textContent = new Date(stale.ts).toLocaleString();
+      render();
+    } else {
+      $('loadingArea').innerHTML = `<div class="error-box"><strong>Failed to load data.</strong> ${e.message}<code>${e.stack||''}</code></div>`;
+      msg.innerHTML = '<span class="status-dot" style="background:var(--red)"></span> Error';
+    }
   } finally {
     btn.disabled = false;
   }
+}
+
+function applyData(d){
+  STATE.jobs       = d.jobs || [];
+  STATE.workorders = d.workorders || [];
+  STATE.estimates  = d.estimates || [];
+  STATE.invoices   = d.invoices || [];
+  STATE.bills      = d.bills || [];
 }
 
 function parseSection(data, key){
@@ -300,6 +396,8 @@ function normalizeCustomerName(name){
 }
 
 function extractBillCustomer(bill){
+  // Use pre-extracted name from cache if available
+  if(bill._custName) return bill._custName;
   // Extract CustomerRef from line items (QBO stores job tagging at line level)
   if(bill.Line && Array.isArray(bill.Line)){
     for(const line of bill.Line){
