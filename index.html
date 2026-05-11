@@ -133,7 +133,7 @@ footer{text-align:center;padding:16px;font-size:11px;color:var(--gray-600);borde
 </div>
 
 <footer>
-  SW Pools Sales &amp; Profit Dashboard v2.0 &mdash; Data: JobNimbus + QuickBooks &mdash; Updated <span id="lastUpdated">--</span>
+  SW Pools Sales &amp; Profit Dashboard v2.1 &mdash; Data: JobNimbus + QuickBooks &mdash; Updated <span id="lastUpdated">--</span>
 </footer>
 
 <script>
@@ -143,7 +143,7 @@ const TERMINAL_STATUSES = ['Paid & Closed','Job Completed','Final Job Audit','Th
 const COMPLETED_STATUSES = ['Paid & Closed','Job Completed','Final Job Audit'];
 
 // ─── STATE ───────────────────────────────────────────────────────
-let STATE = { jobs:[], workorders:[], invoices:[], bills:[], currentTab:'active', sortCol:'display_name', sortDir:1 };
+let STATE = { jobs:[], workorders:[], invoices:[], bills:[], currentTab:'active', sortCol:'name', sortDir:1 };
 
 // ─── UTILITY ─────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -259,7 +259,7 @@ function buildJobFinancials(){
   });
 
   return STATE.jobs.map(job => {
-    const jobName = normalizeCustomerName(job.display_name || '');
+    const jobName = normalizeCustomerName(job.name || '');
     // Also try last name match
     const parts = jobName.split(' ');
     const lastName = parts[parts.length-1];
@@ -281,7 +281,7 @@ function buildJobFinancials(){
       });
     }
 
-    const estimatedRevenue = parseFloat(job.sales_price) || parseFloat(job.estimate_total) || 0;
+    const estimatedRevenue = parseFloat(job.approved_estimate_total) || 0;
     const actualRevenue = matchedInvoices.reduce((s,i) => s + (parseFloat(i.TotalAmt)||0), 0);
     const actualCost = matchedBills.reduce((s,b) => s + (parseFloat(b.TotalAmt)||0), 0);
     const overheadAmt = actualCost * oh;
@@ -337,7 +337,7 @@ function renderSummaryCards(jobs, tab){
 
   $('summaryCards').innerHTML = `
     <div class="card"><div class="card-label">${tab==='active'?'Active':'Completed'} Jobs</div><div class="card-value">${jobs.length}</div><div class="card-sub">${jobsWithRev} with QB revenue</div></div>
-    <div class="card"><div class="card-label">Estimated Revenue</div><div class="card-value blue">${fmt(totalEstimated)}</div><div class="card-sub">From JN sales price</div></div>
+    <div class="card"><div class="card-label">Estimated Revenue</div><div class="card-value blue">${fmt(totalEstimated)}</div><div class="card-sub">From JN approved estimates</div></div>
     <div class="card"><div class="card-label">Actual Revenue</div><div class="card-value">${fmt(totalActualRev)}</div><div class="card-sub">QB invoices</div></div>
     <div class="card"><div class="card-label">True Cost</div><div class="card-value">${fmt(totalActualCost)}</div><div class="card-sub">QB bills + ${(overheadRate()*100).toFixed(0)}% overhead</div></div>
     <div class="card"><div class="card-label">Gross Profit</div><div class="card-value ${totalProfit>=0?'green':'red'}">${fmt(totalProfit)}</div><div class="card-sub">Revenue - True Cost</div></div>
@@ -362,7 +362,7 @@ function renderTable(jobs, tab){
 
   const rows = jobs.map(j => `
     <tr class="clickable" onclick="openDrillDown('${j.jnid}')">
-      <td>${j.display_name||'—'}</td>
+      <td>${j.name||'—'}</td>
       <td>${j.jobType}</td>
       <td>${statusPill(j.status_name)}</td>
       <td class="text-right">${fmt(j.estimatedRevenue)}</td>
@@ -378,7 +378,7 @@ function renderTable(jobs, tab){
   $('tableWrap').innerHTML = `
     <table>
       <thead><tr>
-        <th onclick="sortBy('display_name')">Customer${arrow('display_name')}</th>
+        <th onclick="sortBy('name')">Customer${arrow('name')}</th>
         <th onclick="sortBy('jobType')">Type${arrow('jobType')}</th>
         <th onclick="sortBy('status_name')">Status${arrow('status_name')}</th>
         <th class="text-right" onclick="sortBy('estimatedRevenue')">Est. Revenue${arrow('estimatedRevenue')}</th>
@@ -445,7 +445,7 @@ function openDrillDown(jnid){
   const job = financials.find(j => j.jnid === jnid);
   if(!job) return;
 
-  $('modalTitle').textContent = `${job.display_name || 'Job'} — ${job.jobType}`;
+  $('modalTitle').textContent = `${job.name || 'Job'} — ${job.jobType}`;
 
   let html = `
     <div class="modal-section">
