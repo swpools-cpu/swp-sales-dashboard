@@ -3,25 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SW Pools - Sales &amp; Profit Dashboard</title>
+<title>Southwest Pools - Sales &amp; Profit Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-:root{--navy:#0c2340;--blue:#0077b6;--blue-light:#00a8e8;--green:#2ecc71;--red:#e74c3c;--orange:#f39c12;--yellow:#f1c40f;--gray-50:#f8f9fa;--gray-100:#e9ecef;--gray-200:#dee2e6;--gray-400:#ced4da;--gray-600:#6c757d;--gray-800:#343a40;--white:#fff;--radius:8px;--shadow:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 4px 16px rgba(0,0,0,.12)}
+:root{--navy:#152d53;--navy-mid:#1a3660;--navy-light:#1f3f70;--blue:#03417f;--teal:#238baa;--teal-dim:#1a6b83;--green:#2ecc71;--red:#e05252;--orange:#e8a838;--yellow:#f1c40f;--gray-50:#f8f9fa;--gray-100:#e9ecef;--gray-200:#dee2e6;--gray-400:#ced4da;--gray-600:#7a8ea0;--gray-800:#343a40;--text-primary:#fdfdfd;--text-body:#e6e7e8;--text-secondary:#b8b8b8;--white:#fff;--radius:8px;--shadow:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 4px 16px rgba(0,0,0,.12)}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--gray-50);color:var(--gray-800);min-height:100vh}
+body{font-family:'Jost',sans-serif;background:var(--gray-50);color:var(--gray-800);min-height:100vh}
 
 /* HEADER */
-header{background:var(--navy);color:var(--white);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:100}
+header{background:linear-gradient(135deg,var(--navy) 0%,var(--blue) 100%);color:var(--text-primary);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:100}
+.hdr-left{display:flex;align-items:center;gap:14px}
+.logo-mark{width:38px;height:38px;flex-shrink:0}
 header h1{font-size:18px;font-weight:700;letter-spacing:.3px}
-header h1 span{color:var(--blue-light)}
+header h1 span{color:var(--teal)}
 .hdr-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .overhead-ctrl{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.9}
 .overhead-ctrl input{width:52px;padding:3px 5px;border:1px solid rgba(255,255,255,.3);border-radius:4px;background:rgba(255,255,255,.12);color:#fff;text-align:center;font-size:12px}
-.overhead-ctrl input:focus{outline:none;border-color:var(--blue-light)}
+.overhead-ctrl input:focus{outline:none;border-color:var(--teal)}
 .filter-ctrl select{padding:4px 8px;border:1px solid rgba(255,255,255,.3);border-radius:4px;background:rgba(255,255,255,.12);color:#fff;font-size:12px;cursor:pointer}
 .filter-ctrl select option{color:#333;background:#fff}
 .btn{padding:6px 14px;border:none;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
-.btn-refresh{background:var(--blue);color:#fff}
-.btn-refresh:hover{background:var(--blue-light)}
+.btn-refresh{background:var(--teal);color:#fff}
+.btn-refresh:hover{background:var(--teal-dim)}
 .btn-refresh:disabled{opacity:.5;cursor:not-allowed}
 .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
 .status-msg{font-size:11px;opacity:.8}
@@ -30,7 +35,7 @@ header h1 span{color:var(--blue-light)}
 .tab-bar{background:var(--white);border-bottom:1px solid var(--gray-200);padding:0 24px;display:flex;gap:0}
 .tab{padding:12px 20px;font-size:13px;font-weight:600;color:var(--gray-600);cursor:pointer;border-bottom:3px solid transparent;transition:all .15s}
 .tab:hover{color:var(--navy)}
-.tab.active{color:var(--navy);border-bottom-color:var(--blue)}
+.tab.active{color:var(--navy);border-bottom-color:var(--teal)}
 
 /* SUMMARY CARDS */
 .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;padding:18px 24px}
@@ -40,7 +45,7 @@ header h1 span{color:var(--blue-light)}
 .card-sub{font-size:11px;color:var(--gray-600);margin-top:4px}
 .card-value.green{color:var(--green)}
 .card-value.red{color:var(--red)}
-.card-value.blue{color:var(--blue)}
+.card-value.blue{color:var(--teal)}
 .card-value.orange{color:var(--orange)}
 
 /* TABLE */
@@ -87,7 +92,7 @@ tr.clickable{cursor:pointer}
 
 /* LOADING / ERROR */
 .loading-screen{text-align:center;padding:80px 20px}
-.loading-screen .spinner{width:36px;height:36px;border:3px solid var(--gray-200);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+.loading-screen .spinner{width:36px;height:36px;border:3px solid var(--gray-200);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .error-box{background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;padding:16px 20px;border-radius:var(--radius);margin:20px 24px;font-size:13px}
 .error-box code{display:block;margin-top:8px;padding:8px;background:rgba(0,0,0,.05);border-radius:4px;font-size:11px;white-space:pre-wrap;word-break:break-all}
@@ -107,13 +112,27 @@ footer{text-align:center;padding:16px;font-size:11px;color:var(--gray-600);borde
 <body>
 
 <header>
-  <h1><span>SW POOLS</span> &mdash; Sales &amp; Profit Dashboard</h1>
+  <div class="hdr-left">
+    <svg class="logo-mark" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+      <rect width="48" height="48" rx="8" fill="#03417f"/>
+      <text x="24" y="18" text-anchor="middle" font-family="Jost,sans-serif" font-weight="800" font-size="14" fill="#fdfdfd" dominant-baseline="central">SW</text>
+      <path d="M10 28 C16 24, 22 32, 28 28 C34 24, 38 30, 38 28" stroke="#fdfdfd" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+      <path d="M10 34 C16 30, 22 38, 28 34 C34 30, 38 36, 38 34" stroke="#fdfdfd" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+      <ellipse cx="24" cy="42" rx="8" ry="2.5" fill="#fdfdfd" opacity=".6"/>
+    </svg>
+    <h1><span>SOUTHWEST POOLS</span> &mdash; Sales &amp; Profit Dashboard</h1>
+  </div>
   <div class="hdr-right">
     <div class="filter-ctrl">
       <select id="dateRange" onchange="render()">
+        <option value="q1">Q1 (Jan-Mar)</option>
+        <option value="q2">Q2 (Apr-Jun)</option>
+        <option value="q3">Q3 (Jul-Sep)</option>
+        <option value="q4">Q4 (Oct-Dec)</option>
         <option value="thisyear">This Year</option>
-        <option value="12months">Last 12 Months</option>
-        <option value="all" selected>All Time</option>
+        <option value="12months" selected>Last 12 Months</option>
+        <option value="lastyear">Last Year</option>
+        <option value="all">All Time</option>
       </select>
     </div>
     <div class="overhead-ctrl">
@@ -147,7 +166,7 @@ footer{text-align:center;padding:16px;font-size:11px;color:var(--gray-600);borde
 </div>
 
 <footer>
-  SW Pools Sales &amp; Profit Dashboard v3.0 &mdash; Data: JobNimbus + QuickBooks &mdash; Updated <span id="lastUpdated">--</span>
+  Southwest Pools &mdash; Sales &amp; Profit Dashboard v3.1 &mdash; Data: JobNimbus + QuickBooks &mdash; Updated <span id="lastUpdated">--</span>
 </footer>
 
 <script>
@@ -205,12 +224,18 @@ function dateFilter(epochSec){
   if(range === 'all') return true;
   if(!epochSec) return false;
   const now = Date.now()/1000;
+  const jobDate = new Date(epochSec*1000);
+  const jobYr = jobDate.getFullYear();
+  const jobMo = jobDate.getMonth(); // 0-11
+  const thisYr = new Date().getFullYear();
+
   if(range === '12months') return (now - epochSec) < 365.25*86400;
-  if(range === 'thisyear'){
-    const yr = new Date().getFullYear();
-    const jobYr = new Date(epochSec*1000).getFullYear();
-    return jobYr === yr;
-  }
+  if(range === 'thisyear') return jobYr === thisYr;
+  if(range === 'lastyear') return jobYr === thisYr - 1;
+  if(range === 'q1') return jobYr === thisYr && jobMo >= 0 && jobMo <= 2;
+  if(range === 'q2') return jobYr === thisYr && jobMo >= 3 && jobMo <= 5;
+  if(range === 'q3') return jobYr === thisYr && jobMo >= 6 && jobMo <= 8;
+  if(range === 'q4') return jobYr === thisYr && jobMo >= 9 && jobMo <= 11;
   return true;
 }
 
