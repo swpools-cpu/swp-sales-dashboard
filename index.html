@@ -133,6 +133,15 @@ footer{text-align:center;padding:16px;font-size:11px;color:var(--gray-600);borde
         <option value="all">All Time</option>
       </select>
     </div>
+    <div class="filter-ctrl">
+      <select id="jobTypeFilter" onchange="STATE.jobTypeFilter=this.value;render()">
+        <option value="all">All Types</option>
+        <option value="New Construction">New Construction</option>
+        <option value="Remodel">Remodel</option>
+        <option value="Outdoor Living">Outdoor Living</option>
+        <option value="Service">Service</option>
+      </select>
+    </div>
     <div class="overhead-ctrl">
       <label>Overhead %</label>
       <input type="number" id="overheadRate" value="31" min="0" max="100" step="0.5">
@@ -146,6 +155,7 @@ footer{text-align:center;padding:16px;font-size:11px;color:var(--gray-600);borde
   <div class="tab" data-tab="pipeline" onclick="switchTab('pipeline')">Pipeline</div>
   <div class="tab active" data-tab="production" onclick="switchTab('production')">Production</div>
   <div class="tab" data-tab="completed" onclick="switchTab('completed')">Completed</div>
+  <div class="tab" data-tab="jobtypes" onclick="switchTab('jobtypes')">Job Types</div>
 </div>
 
 <div id="summaryCards" class="summary"></div>
@@ -164,7 +174,7 @@ footer{text-align:center;padding:16px;font-size:11px;color:var(--gray-600);borde
 </div>
 
 <footer>
-  Southwest Pools &mdash; Sales &amp; Profit Dashboard v3.3 &mdash; Data: JobNimbus + QuickBooks &mdash; Updated <span id="lastUpdated">--</span>
+  Southwest Pools &mdash; Sales &amp; Profit Dashboard v3.4 &mdash; Data: JobNimbus + QuickBooks &mdash; Updated <span id="lastUpdated">--</span>
 </footer>
 
 <script>
@@ -182,7 +192,7 @@ const EXCLUDED_STATUSES = ['Lost Sales'];
 // Production = everything not in Pipeline, Completed, or Excluded
 
 // ─── STATE ───────────────────────────────────────────────────────
-let STATE = { jobs:[], workorders:[], estimates:[], invoices:[], bills:[], currentTab:'production', sortCol:'name', sortDir:1 };
+let STATE = { jobs:[], workorders:[], estimates:[], invoices:[], bills:[], currentTab:'production', sortCol:'name', sortDir:1, jobTypeFilter:'all' };
 
 // ─── UTILITY ─────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -460,6 +470,17 @@ function buildEstimateMap(){
   return map;
 }
 
+function mapJobType(job){
+  // Map JN record_type_name to dashboard display categories
+  const rtn = (job.record_type_name || '').toLowerCase();
+  if(job.record_type === 67 || rtn.includes('new construction')) return 'New Construction';
+  if(job.record_type === 68 || rtn.includes('remodel') || rtn.includes('renovation')) return 'Remodel';
+  if(rtn.includes('outdoor living')) return 'Outdoor Living';
+  if(rtn.includes('service') || rtn.includes('repair') || rtn.includes('maintenance') || rtn.includes('filter')) return 'Service';
+  if(rtn.includes('small job')) return 'Remodel';
+  return 'Other';
+}
+
 function buildJobFinancials(){
   const oh = overheadRate();
   const invoiceMap = {};
@@ -556,7 +577,7 @@ function buildJobFinancials(){
       matchedBills,
       matchedEstimates: estData.estimates,
       daysInStatus: daysSince(job.date_status_change),
-      jobType: job.record_type === 67 ? 'New Construction' : job.record_type === 68 ? 'Remodel' : 'Other'
+      jobType: mapJobType(job)
     };
   });
 }
@@ -566,8 +587,25 @@ function render(){
   const financials = buildJobFinancials();
   const tab = STATE.currentTab;
 
+  // Job Types tab uses ALL non-excluded jobs (applies its own date filter internally)
+  if(tab === 'jobtypes'){
+    let all = financials.filter(j => j.category !== 'excluded');
+    // Apply date filter
+    const range = $('dateRange').value;
+    if(range !== 'all'){
+      all = all.filter(j => dateFilter(j.date_created) || dateFilter(j.date_status_change));
+    }
+    renderJobTypeAnalysis(all);
+    return;
+  }
+
   // Filter by tab
   let filtered = financials.filter(j => j.category === tab);
+
+  // Apply job type filter
+  if(STATE.jobTypeFilter !== 'all'){
+    filtered = filtered.filter(j => j.jobType === STATE.jobTypeFilter);
+  }
 
   // Apply date filter (using date_created for pipeline, date_status_change for completed, both considered for production)
   if(tab === 'pipeline'){
@@ -712,6 +750,132 @@ function renderFinancialView(jobs, tab){
         <th class="text-right" onclick="sortBy('margin')">Margin${arrow('margin')}</th>
       </tr></thead>
       <tbody>${rows || '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--gray-600)">No '+label.toLowerCase()+' jobs found</td></tr>'}</tbody>
+    </table>
+  `;
+}
+
+// ─── JOB TYPE ANALYSIS TAB ───────────────────────────────────────
+function renderJobTypeAnalysis(allJobs){
+  const types = ['New Construction','Remodel','Outdoor Living','Service'];
+  const oh = overheadRate();
+
+  // Build metrics per type
+  const metrics = types.map(type => {
+    const jobs = allJobs.filter(j => j.jobType === type);
+    const count = jobs.length;
+    const pipelineJobs = jobs.filter(j => j.category === 'pipeline');
+    const activeJobs = jobs.filter(j => j.category === 'production');
+    const completedJobs = jobs.filter(j => j.category === 'completed');
+    const estRevenue = jobs.reduce((s,j) => s+j.estimatedRevenue, 0);
+    const estCost = jobs.reduce((s,j) => s+j.estimatedCost, 0);
+    const collected = jobs.reduce((s,j) => s+j.collected, 0);
+    const actualCost = jobs.reduce((s,j) => s+j.trueCost, 0);
+    const profit = jobs.reduce((s,j) => s+j.grossProfit, 0);
+    const margin = collected > 0 ? (profit/collected)*100 : 0;
+    const avgRevenue = count > 0 ? estRevenue/count : 0;
+    const avgCollected = count > 0 ? collected/count : 0;
+    const avgProfit = count > 0 ? profit/count : 0;
+    const invoiced = jobs.reduce((s,j) => s+j.invoiced, 0);
+    const outstanding = jobs.reduce((s,j) => s+j.outstanding, 0);
+    return { type, count, pipelineJobs:pipelineJobs.length, activeJobs:activeJobs.length, completedJobs:completedJobs.length, estRevenue, estCost, collected, invoiced, outstanding, actualCost, profit, margin, avgRevenue, avgCollected, avgProfit };
+  });
+
+  // Also compute "Other" if any exist
+  const otherJobs = allJobs.filter(j => !types.includes(j.jobType));
+  if(otherJobs.length > 0){
+    const count = otherJobs.length;
+    const estRevenue = otherJobs.reduce((s,j) => s+j.estimatedRevenue, 0);
+    const estCost = otherJobs.reduce((s,j) => s+j.estimatedCost, 0);
+    const collected = otherJobs.reduce((s,j) => s+j.collected, 0);
+    const actualCost = otherJobs.reduce((s,j) => s+j.trueCost, 0);
+    const profit = otherJobs.reduce((s,j) => s+j.grossProfit, 0);
+    const margin = collected > 0 ? (profit/collected)*100 : 0;
+    const invoiced = otherJobs.reduce((s,j) => s+j.invoiced, 0);
+    const outstanding = otherJobs.reduce((s,j) => s+j.outstanding, 0);
+    metrics.push({ type:'Other', count, pipelineJobs:otherJobs.filter(j=>j.category==='pipeline').length, activeJobs:otherJobs.filter(j=>j.category==='production').length, completedJobs:otherJobs.filter(j=>j.category==='completed').length, estRevenue, estCost, collected, invoiced, outstanding, actualCost, profit, margin, avgRevenue:count?estRevenue/count:0, avgCollected:count?collected/count:0, avgProfit:count?profit/count:0 });
+  }
+
+  // Totals row
+  const totals = {
+    count: allJobs.length,
+    estRevenue: allJobs.reduce((s,j) => s+j.estimatedRevenue, 0),
+    estCost: allJobs.reduce((s,j) => s+j.estimatedCost, 0),
+    collected: allJobs.reduce((s,j) => s+j.collected, 0),
+    actualCost: allJobs.reduce((s,j) => s+j.trueCost, 0),
+    profit: allJobs.reduce((s,j) => s+j.grossProfit, 0),
+    invoiced: allJobs.reduce((s,j) => s+j.invoiced, 0)
+  };
+  totals.margin = totals.collected > 0 ? (totals.profit/totals.collected)*100 : 0;
+  totals.avgRevenue = totals.count > 0 ? totals.estRevenue/totals.count : 0;
+
+  // Find best-performing type by margin (min 1 job with collections)
+  const withData = metrics.filter(m => m.collected > 0);
+  const bestMargin = withData.length ? withData.reduce((a,b) => a.margin > b.margin ? a : b) : null;
+  const bestRevenue = withData.length ? withData.reduce((a,b) => a.collected > b.collected ? a : b) : null;
+
+  // Summary cards
+  $('summaryCards').innerHTML = `
+    <div class="card"><div class="card-label">Total Jobs</div><div class="card-value">${totals.count}</div><div class="card-sub">Across all types</div></div>
+    <div class="card"><div class="card-label">Total Est. Revenue</div><div class="card-value blue">${fmt(totals.estRevenue)}</div><div class="card-sub">${fmt(totals.collected)} collected</div></div>
+    <div class="card"><div class="card-label">Total Profit</div><div class="card-value ${totals.profit>=0?'green':'red'}">${fmt(totals.profit)}</div><div class="card-sub">${fmtPct(totals.margin)} avg margin</div></div>
+    <div class="card"><div class="card-label">Best Margin</div><div class="card-value green">${bestMargin ? bestMargin.type : '—'}</div><div class="card-sub">${bestMargin ? fmtPct(bestMargin.margin) : 'No data yet'}</div></div>
+    <div class="card"><div class="card-label">Top Revenue</div><div class="card-value blue">${bestRevenue ? bestRevenue.type : '—'}</div><div class="card-sub">${bestRevenue ? fmt(bestRevenue.collected)+' collected' : 'No data yet'}</div></div>
+  `;
+
+  // Comparison table
+  const typeColors = {'New Construction':'var(--teal)','Remodel':'var(--orange)','Outdoor Living':'var(--green)','Service':'#8e44ad','Other':'var(--gray-600)'};
+
+  const rows = metrics.filter(m => m.count > 0).map(m => {
+    const color = typeColors[m.type] || 'var(--gray-600)';
+    const pctOfRev = totals.estRevenue > 0 ? ((m.estRevenue/totals.estRevenue)*100).toFixed(0) : 0;
+    return `
+    <tr>
+      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;vertical-align:middle"></span><strong>${m.type}</strong></td>
+      <td class="text-center">${m.count}</td>
+      <td class="text-center" style="font-size:11px;color:var(--gray-600)">${m.pipelineJobs} / ${m.activeJobs} / ${m.completedJobs}</td>
+      <td class="text-right">${fmt(m.estRevenue)}<div style="font-size:10px;color:var(--gray-600)">${pctOfRev}% of total</div></td>
+      <td class="text-right">${fmt(m.estCost)}</td>
+      <td class="text-right" style="color:var(--green)">${fmt(m.collected)}</td>
+      <td class="text-right">${fmt(m.actualCost)}</td>
+      <td class="text-right" style="color:${m.profit>=0?'var(--green)':'var(--red)'}; font-weight:600">${fmt(m.profit)}</td>
+      <td class="text-right">${marginBar(m.margin)}</td>
+      <td class="text-right">${fmt(m.avgRevenue)}</td>
+      <td class="text-right" style="color:${m.avgProfit>=0?'var(--green)':'var(--red)'}">${fmt(m.avgProfit)}</td>
+    </tr>`;
+  }).join('');
+
+  // Totals row
+  const totalsRow = `
+    <tr style="background:var(--gray-100);font-weight:700">
+      <td>All Types</td>
+      <td class="text-center">${totals.count}</td>
+      <td class="text-center"></td>
+      <td class="text-right">${fmt(totals.estRevenue)}</td>
+      <td class="text-right">${fmt(totals.estCost)}</td>
+      <td class="text-right" style="color:var(--green)">${fmt(totals.collected)}</td>
+      <td class="text-right">${fmt(totals.actualCost)}</td>
+      <td class="text-right" style="color:${totals.profit>=0?'var(--green)':'var(--red)'}">${fmt(totals.profit)}</td>
+      <td class="text-right">${marginBar(totals.margin)}</td>
+      <td class="text-right">${fmt(totals.avgRevenue)}</td>
+      <td class="text-right">${fmt(totals.count>0?totals.profit/totals.count:0)}</td>
+    </tr>`;
+
+  $('tableWrap').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Job Type</th>
+        <th class="text-center">Jobs</th>
+        <th class="text-center" style="font-size:10px">Pipeline / Active / Done</th>
+        <th class="text-right">Est. Revenue</th>
+        <th class="text-right">Est. Cost</th>
+        <th class="text-right">Collected</th>
+        <th class="text-right">Actual Cost</th>
+        <th class="text-right">Profit</th>
+        <th class="text-right">Margin</th>
+        <th class="text-right">Avg Rev/Job</th>
+        <th class="text-right">Avg Profit/Job</th>
+      </tr></thead>
+      <tbody>${rows}${totalsRow}</tbody>
     </table>
   `;
 }
